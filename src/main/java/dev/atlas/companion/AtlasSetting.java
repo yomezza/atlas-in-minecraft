@@ -7,8 +7,11 @@ import java.util.function.Function;
 /** Shared field definitions keep GUI parsing independent of the Minecraft client. */
 public enum AtlasSetting {
     PROTECTION("protectOwner", 5, c -> Boolean.toString(c.protectOwner), (c,v) -> c.protectOwner = bool(v)),
+    PERMANENT_PROTECTION("permanentProtection", 5, c -> Boolean.toString(c.permanentProtection), (c,v) -> c.permanentProtection = bool(v)),
     PRANKS("harmlessPranks", 5, c -> Boolean.toString(c.harmlessPranks), (c,v) -> c.harmlessPranks = bool(v)),
     AUTONOMOUS("autonomousFlight", 5, c -> Boolean.toString(c.autonomousFlight), (c,v) -> c.autonomousFlight = bool(v)),
+    MAX_SCALE("maxCompanionScale", 3, c -> Integer.toString(c.maxCompanionScale), (c,v) -> c.maxCompanionScale = Integer.parseInt(v.strip())),
+    GROWTH_DURATION("growthDurationSeconds", 2, c -> Integer.toString(c.growthDurationSeconds), (c,v) -> c.growthDurationSeconds = Integer.parseInt(v.strip())),
     COMMENTS("ambientComments", 5, c -> Boolean.toString(c.ambientComments), (c,v) -> c.ambientComments = bool(v)),
     COMMENT_INTERVAL("commentIntervalSeconds", 3, c -> Integer.toString(c.commentIntervalSeconds), (c,v) -> c.commentIntervalSeconds = Integer.parseInt(v.strip())),
     NON_OPERATORS("allowNonOperators", 5, c -> Boolean.toString(c.allowNonOperators), (c,v) -> c.allowNonOperators = bool(v)),

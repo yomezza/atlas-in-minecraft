@@ -37,9 +37,8 @@ public final class AtlasAi {
         }
         try {
             URI endpoint = URI.create(AtlasMod.CONFIG.aiEndpoint);
-            if (!"https".equalsIgnoreCase(endpoint.getScheme()) && !("http".equalsIgnoreCase(endpoint.getScheme())
-                    && ("localhost".equals(endpoint.getHost()) || "127.0.0.1".equals(endpoint.getHost()))))
-                throw new IllegalArgumentException("AI endpoint must use HTTPS, or HTTP on localhost");
+            if (!"https".equalsIgnoreCase(endpoint.getScheme()) && !"http".equalsIgnoreCase(endpoint.getScheme()))
+                throw new IllegalArgumentException("AI endpoint must use HTTP or HTTPS");
             JsonArray messages = new JsonArray();
             messages.add(message("system", systemPrompt()));
             if (!AtlasMod.CONFIG.aiSystemPrompt.isBlank())
@@ -67,7 +66,7 @@ public final class AtlasAi {
                     if (requestSession != session) return;
                     PENDING.remove(owner);
                     ServerPlayerEntity current = server.getPlayerManager().getPlayer(owner);
-                    if (current == null || !AtlasManager.active(current)) return;
+                    if (current == null || (!AtlasManager.active(current) && !AtlasShield.protects(current))) return;
                     if (error != null || response == null || response.statusCode() != 200) {
                         AtlasManager.say(current, "Не удалось связаться с AI.");
                         fallback(current, input);
@@ -106,8 +105,14 @@ public final class AtlasAi {
     }
     private static void execute(ServerPlayerEntity player, JsonObject action) {
         String type = action.get("type").getAsString();
-        if (!AtlasManager.active(player)) return;
+        if (!AtlasManager.active(player) && !AtlasShield.protects(player)) return;
         switch (type) {
+            case "laser_offer" -> AtlasCombat.offer(player);
+            case "protection" -> AtlasShield.setMode(player, switch(action.get("mode").getAsString()) {
+                case "permanent" -> 1; case "off" -> 2; default -> 0;
+            });
+            case "scale" -> AtlasManager.execute(player, new IntentParser.Intent(action.has("multiplier") ? "scale_relative" : "scale",
+                    action.get(action.has("multiplier") ? "multiplier" : "factor").getAsString(), 0));
             case "commands" -> AtlasCommands.submit(player, action.getAsJsonArray("commands"));
             case "give" -> AtlasManager.execute(player, new IntentParser.Intent("give", action.get("item").getAsString(), action.get("count").getAsInt()));
             case "health" -> AtlasManager.execute(player, new IntentParser.Intent("health", "", action.get("hp").getAsInt()));
@@ -134,8 +139,15 @@ public final class AtlasAi {
                 + "Для произвольных построек используй серии fill/setblock, для сложных задач — execute. Не заявляй о недоступности действия, "
                 + "если его можно выразить игровыми командами. Стандартные лимиты Minecraft сохраняются. "
                 + "Административные stop/ban/kick/op/whitelist/save и аналогичные не поддерживаются. "
-                + "Нельзя убивать владельца, удалять спутника или лишать владельца защиты, даже в шутку. "
+                + "Нельзя убивать владельца, удалять спутника или самовольно лишать владельца защиты. Режим защиты меняй по его прямой просьбе, никогда в шутку. "
                 + "Дополнительно разрешены: {type:give,item:'minecraft:diamond',count:1..2304}, {type:health,hp:20..200}, "
+                + "{type:scale,factor:0.125.." + AtlasMod.CONFIG.maxCompanionScale + "} задаёт абсолютный масштаб спутника; "
+                + "{type:scale,multiplier:2} увеличивает текущую цель вдвое, multiplier:0.5 уменьшает вдвое. "
+                + "Обычный размер 1, немного больше 1.5, большой 4, огромный 32, гигантский 64, колоссальный 128. "
+                + "Рост плавный; большие размеры автоматически поднимаются в небо. Меняй только размер самого Атласа по просьбе игрока. "
+                + "Для лазерной атаки только {type:laser_offer}: мод спросит подтверждение игрока. Не заменяй лазер командами kill/damage; "
+                + "не подтверждай атаку за игрока. Обнаружение врагов само по себе не разрешает нападение. "
+                + "Защита игрока: {type:protection,mode:'held'|'permanent'|'off'}. held — пока предмет в руках, permanent — всегда, off — отключить. "
                 + "{type:build,structure:'house'|'tower'|'platform'}, {type:heal|feed|follow|stay|recall|undo|prank|day|night|clear|pranks_on|pranks_off}. "
                 + "Для произвольной постройки {type:blueprint,cuboids:[{x1:0,y1:0,z1:0,x2:2,y2:0,z2:2,block:'minecraft:stone'}]}. "
                 + "Координаты относительны к центру площадки перед игроком: x,z -24..24, y 0..32. "

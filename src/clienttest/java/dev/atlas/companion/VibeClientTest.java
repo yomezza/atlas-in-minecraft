@@ -20,6 +20,7 @@ import net.minecraft.client.gui.widget.ElementListWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.util.ScreenshotRecorder;
 import net.minecraft.text.Text;
+import net.minecraft.item.ItemStack;
 
 /** Real client smoke test; this source set is excluded from the distributed mod. */
 public final class VibeClientTest implements ClientModInitializer {
@@ -36,7 +37,7 @@ public final class VibeClientTest implements ClientModInitializer {
                 started = true; original = AtlasMod.CONFIG.copy(); delay = 10;
             }
             if (delay-- > 0) return;
-            try { step(client); delay = 6; }
+            try { delay = 6; step(client); }
             catch (Throwable failed) { finish(client, failed); }
         });
     }
@@ -83,8 +84,103 @@ public final class VibeClientTest implements ClientModInitializer {
             case 9 -> {
                 button(configScreen, Text.translatable("vibe.atlas.save").getString()).onPress();
                 require(AtlasMod.CONFIG.aiSystemPrompt.equals(AtlasConfig.DEFAULT_SYSTEM_PROMPT), "Restored context must apply");
+                client.setScreen(new dev.atlas.companion.client.AtlasWheelScreen());
+            }
+            case 10 -> {
+                var wheel = (dev.atlas.companion.client.AtlasWheelScreen)client.currentScreen;
+                wheel.receive(new AtlasControlNetworking.Snapshot(true, true, false, 0, 1, 1, 128, 2,
+                        java.util.UUID.randomUUID().toString(), false, 0, true, "wheel.ready"));
+            }
+            case 11 -> {
+                screenshot(client, "06-wheel-size.png");
+                var wheel = (dev.atlas.companion.client.AtlasWheelScreen)client.currentScreen;
+                TextFieldWidget exact = fields(wheel).get(0); exact.setText("64"); button(wheel, "OK").onPress();
+                require(wheel.children().stream().anyMatch(e -> e instanceof net.minecraft.client.gui.widget.SliderWidget s && s.getMessage().getString().contains("64")),
+                        "The radial scale slider must accept an exact giant size");
+                wheel.select(dev.atlas.companion.client.AtlasWheelScreen.Option.ATTACK);
+                require(button(wheel, Text.translatable("wheel.confirm_attack").getString()).active, "Offered targets must expose a human confirmation control");
+            }
+            case 12 -> { screenshot(client, "07-wheel-attack.png"); ((dev.atlas.companion.client.AtlasWheelScreen)client.currentScreen).select(dev.atlas.companion.client.AtlasWheelScreen.Option.SHIELD); }
+            case 13 -> {
+                screenshot(client, "08-wheel-shield.png");
+                original.save(); AtlasMod.CONFIG = original;
+                if (Boolean.getBoolean("atlas.worldtest")) client.createIntegratedServerLoader().start(new TitleScreen(), "AtlasPreview");
+                else finish(client, null);
+            }
+            case 14 -> {
+                if (client.player == null || client.world == null || client.getServer() == null || client.currentScreen != null || client.getOverlay() != null) { stage--; return; }
+                client.getServer().execute(() -> {
+                    ServerSetup.prepare(client);
+                });
+                delay = 100;
+            }
+            case 15 -> {
+                require(((AtlasShieldAccess)client.player).atlas$shieldActive(), "Owner must receive the synchronized shield flag");
+                client.options.setPerspective(net.minecraft.client.option.Perspective.THIRD_PERSON_FRONT);
+                client.player.setYaw(0); client.player.setPitch(0);
+            }
+            case 16 -> {
+                screenshot(client, "09-energy-shield.png");
+                client.options.setPerspective(net.minecraft.client.option.Perspective.FIRST_PERSON);
+                client.player.setYaw(0); client.player.setPitch(-73);
+            }
+            case 17 -> {
+                screenshot(client, "10-giant-atlas.png");
+                client.getServer().execute(() -> {
+                    var player = client.getServer().getPlayerManager().getPlayer(client.player.getUuid());
+                    AtlasManager.find(player).setTargetScale(4);
+                });
+                delay = 100;
+            }
+            case 18 -> {
+                client.player.setPitch(-20); client.player.setYaw(0);
+                client.getServer().execute(() -> ServerSetup.laser(client));
+                delay = 10;
+            }
+            case 19 -> { screenshot(client, "11-laser.png"); middleClick(client); }
+            case 20 -> {
+                require(client.currentScreen instanceof dev.atlas.companion.client.AtlasWheelScreen, "Middle mouse button must open the actual in-world wheel");
+                screenshot(client, "12-wheel-in-world.png");
+                ((dev.atlas.companion.client.AtlasWheelScreen)client.currentScreen).select(dev.atlas.companion.client.AtlasWheelScreen.Option.SHIELD);
+            }
+            case 21 -> button(client.currentScreen, Text.translatable("wheel.shield_held").getString()).onPress();
+            case 22 -> {
+                require(!((AtlasShieldAccess)client.player).atlas$shieldActive(), "Energy field must disappear after choosing held-only protection with empty hands");
+                button(client.currentScreen, Text.translatable("wheel.shield_permanent").getString()).onPress();
+            }
+            case 23 -> {
+                require(((AtlasShieldAccess)client.player).atlas$shieldActive(), "Permanent shield control must synchronize back to the actual owner client");
+                middleClick(client); require(client.currentScreen == null, "Middle click must close the radial wheel");
                 finish(client, null);
             }
+        }
+    }
+    private static void middleClick(MinecraftClient client) throws Exception {
+        var method = net.minecraft.client.Mouse.class.getDeclaredMethod("onMouseButton", long.class, int.class, int.class, int.class);
+        method.setAccessible(true); method.invoke(client.mouse, client.getWindow().getHandle(), 2, 1, 0);
+    }
+    private static final class ServerSetup {
+        static void prepare(MinecraftClient client) {
+            var server = client.getServer(); var player = server.getPlayerManager().getPlayer(client.player.getUuid());
+            var world = player.getServerWorld();
+            var ground = world.getTopPosition(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, new net.minecraft.util.math.BlockPos(64, 0, 64));
+            player.changeGameMode(net.minecraft.world.GameMode.CREATIVE);
+            player.teleport(world, 64.5, ground.getY() + 0.1, 64.5, 0, 0);
+            player.setStackInHand(net.minecraft.util.Hand.MAIN_HAND, new ItemStack(AtlasMod.ATLAS));
+            AtlasShield.setMode(player, 1);
+            AtlasMod.ATLAS.use(world, player, net.minecraft.util.Hand.MAIN_HAND);
+            var atlas = AtlasManager.find(player);
+            atlas.setPosition(player.getPos().add(0, 1.05, 6)); atlas.setFlightMode(2); atlas.setTargetScale(16);
+            AtlasIdentity.deployed(player, atlas);
+        }
+        static void laser(MinecraftClient client) {
+            var player = client.getServer().getPlayerManager().getPlayer(client.player.getUuid());
+            var mob = net.minecraft.entity.EntityType.CREEPER.create(player.getWorld());
+            mob.setPosition(player.getPos().add(0, 0, 11)); mob.setAiDisabled(true);
+            mob.getAttributeInstance(net.minecraft.entity.attribute.EntityAttributes.GENERIC_MAX_HEALTH).setBaseValue(500); mob.setHealth(500);
+            player.getWorld().spawnEntity(mob);
+            AtlasCombat.offer(player); var offer = AtlasCombat.pending(player);
+            if (offer != null) AtlasCombat.confirm(player, offer.token().toString());
         }
     }
     private void finish(MinecraftClient client, Throwable failure) {
@@ -92,7 +188,7 @@ public final class VibeClientTest implements ClientModInitializer {
         try {
             if (original != null) { original.save(); AtlasMod.CONFIG = original; }
             Path result = Path.of("vibe-gui-result.txt");
-            Files.writeString(result, failure == null ? "PASS: button, mod list, scrolling, validation, multiline context, save, apply, defaults\n" : "FAIL: " + failure + "\n");
+            Files.writeString(result, failure == null ? "PASS: Vibe Coding, context editor, save, defaults, radial wheel, scale slider, attack confirmation, shield controls\n" : "FAIL: " + failure + "\n");
         } catch (Exception error) { error.printStackTrace(); }
         if (failure != null) failure.printStackTrace();
         client.scheduleStop();

@@ -81,15 +81,17 @@ public final class AtlasManager {
     }
     public static void command(ServerPlayerEntity player, String message) {
         if (!allowed(player)) { say(player, "На этом сервере мои способности разрешены только операторам."); return; }
+        if (AtlasCombat.handleReply(player, message)) return;
         IntentParser.Intent intent = IntentParser.parse(message);
         if (intent.type().equals("help")) { help(player); return; }
         if (intent.type().equals("summon")) { summon(player); return; }
-        if (!active(player)) {
+        if (!active(player) && !AtlasShield.protects(player)) {
             say(player, "Возьми меня в руку или выпусти ПКМ. Получить предмет: /atlas призови"); return;
         }
         long now = System.currentTimeMillis();
         if (now - LAST_COMMAND.getOrDefault(player.getUuid(), 0L) < 650) return;
         LAST_COMMAND.put(player.getUuid(), now);
+        if (intent.type().equals("scale") || intent.type().equals("scale_relative") || intent.type().equals("laser_offer")) { execute(player, intent); return; }
         String direct = message.strip();
         if (direct.startsWith("выполни ") || direct.startsWith("команда ") || direct.startsWith("run ")) {
             try { AtlasCommands.direct(player, direct.substring(direct.indexOf(' ') + 1)); }
@@ -106,6 +108,7 @@ public final class AtlasManager {
                 + "Просьбы: призови; дай 64 алмаза; дай minecraft:oak_log 64; вылечи; накорми; увеличь здоровье до 40; "
                 + "построй дом / башню / платформу; отмени постройку; следуй за мной; стой; вернись в руку; пошути; "
                 + "не шути; можешь шутить; сделай день; сделай ночь; убери дождь.\n"
+                + "Размер: немного увеличься; стань огромным; стань гигантским; уменьшись; обычный размер; масштаб 32. "
                 + "Любая игровая команда: «Атлас, выполни summon minecraft:allay ~ ~1 ~». "
                 + "Здоровье задаётся в HP: 40 = 20 сердец. Свободные разговоры и перевод просьб в команды требуют настройки AI.");
     }
@@ -130,8 +133,11 @@ public final class AtlasManager {
         say(player, "Карманный режим. Я всё вижу.");
     }
     public static void execute(ServerPlayerEntity player, IntentParser.Intent intent) {
-        if (!allowed(player) || !active(player)) return;
+        if (!allowed(player) || (!active(player) && !AtlasShield.protects(player))) return;
         switch (intent.type()) {
+            case "protection" -> AtlasShield.setMode(player, intent.amount());
+            case "laser_offer" -> AtlasCombat.offer(player);
+            case "scale", "scale_relative" -> resize(player, intent);
             case "give" -> give(player, intent.argument(), intent.amount());
             case "heal" -> { player.setHealth(player.getMaxHealth()); player.extinguish(); say(player, "Починил человека."); }
             case "feed" -> { player.getHungerManager().setFoodLevel(20); player.getHungerManager().setSaturationLevel(20); say(player, "Сытый человек — предсказуемый человек."); }
@@ -177,6 +183,26 @@ public final class AtlasManager {
         }
         say(player, "Держи: " + item.getName().getString() + " × " + count + ". Законы экономики отвернулись.");
     }
+    private static void resize(ServerPlayerEntity player, IntentParser.Intent intent) {
+        try {
+            AtlasEntity atlas = find(player);
+            AtlasScale.Request request = new AtlasScale.Request(Double.parseDouble(intent.argument()), intent.type().equals("scale_relative"));
+            if (atlas != null) {
+                float scale = request.resolve(atlas.targetScale(), AtlasMod.CONFIG.maxCompanionScale);
+                atlas.setTargetScale(scale);
+                say(player, "Меняю масштаб на " + AtlasScale.format(scale) + "×. " + (scale >= 8 ? "Поднимаюсь в небо." : "Держусь рядом."));
+            } else if (AtlasIdentity.isDeployed(player)) say(player, "Моя сущность ещё загружается. Повтори просьбу через секунду.");
+            else {
+                ItemStack stack = AtlasIdentity.belongsTo(player.getMainHandStack(), player) ? player.getMainHandStack() : player.getOffHandStack();
+                if (!AtlasIdentity.belongsTo(stack, player)) { say(player, "Возьми меня в руку или выпусти ПКМ."); return; }
+                AtlasIdentity.bind(stack, player);
+                float current = stack.hasNbt() && stack.getNbt().contains(AtlasScale.ITEM_KEY) ? stack.getNbt().getFloat(AtlasScale.ITEM_KEY) : 1;
+                float scale = request.resolve(current, AtlasMod.CONFIG.maxCompanionScale);
+                stack.getOrCreateNbt().putFloat(AtlasScale.ITEM_KEY, scale);
+                say(player, "Сохранён масштаб " + AtlasScale.format(scale) + "×. Выпусти меня ПКМ — вырасту до него.");
+            }
+        } catch (IllegalArgumentException invalid) { say(player, invalid.getMessage()); }
+    }
     private static void prank(ServerPlayerEntity player) {
         String[] lines = {"Я удалил твой дом. Шутка. Даже я знаю, сколько ты выбирал окна.",
                 "Сканирование завершено: главный источник опасности — твои решения.",
@@ -189,11 +215,14 @@ public final class AtlasManager {
     public static void tick(MinecraftServer server) {
         AtlasCommands.tick(server);
         AtlasBuilder.tick(server);
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList())
+            ((AtlasShieldAccess)player).atlas$setShieldActive(AtlasShield.protects(player));
         if (server.getTicks() % 10 != 0) return;
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-            if (!active(player)) continue;
-            AtlasObservations.tick(player, server.getTicks());
-            if (AtlasMod.CONFIG.protectOwner && player.isAlive() && !player.isSpectator()) {
+            boolean active = active(player), protection = AtlasShield.protects(player);
+            if (!active && !protection) continue;
+            if (active) AtlasObservations.tick(player, server.getTicks());
+            if (protection && player.isAlive() && !player.isSpectator()) {
                 if (player.isOnGround() && !player.isInLava() && !player.isOnFire())
                     SAFE.put(player.getUuid(), new Anchor(player.getServerWorld(), player.getBlockPos().toImmutable()));
                 player.extinguish(); player.setAir(player.getMaxAir()); player.fallDistance = 0;
@@ -217,6 +246,6 @@ public final class AtlasManager {
         say(player, "Вернул в безопасное место. Давай без повторения эксперимента.");
     }
     public static void clear() {
-        DEPLOYED.clear(); SAFE.clear(); LAST_COMMAND.clear(); PRANKS.clear(); AtlasBuilder.clear(); AtlasCommands.clear(); AtlasObservations.clear();
+        DEPLOYED.clear(); SAFE.clear(); LAST_COMMAND.clear(); PRANKS.clear(); AtlasBuilder.clear(); AtlasCommands.clear(); AtlasObservations.clear(); AtlasCombat.clear();
     }
 }

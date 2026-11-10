@@ -2,6 +2,7 @@
   "required": true,
   "package": "dev.atlas.companion.mixin",
   "compatibilityLevel": "JAVA_17",
-  "mixins": ["LivingEntityMixin"],
+  "mixins": ["LivingEntityMixin", "PlayerEntityMixin"],
+  "client": ["MouseMixin", "PlayerEnergyMixin"],
   "injectors": {"defaultRequire": 1}
 }

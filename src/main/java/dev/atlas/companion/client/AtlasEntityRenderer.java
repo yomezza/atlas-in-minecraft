@@ -15,12 +15,14 @@ public final class AtlasEntityRenderer extends EntityRenderer<AtlasEntity> {
     @Override public void render(AtlasEntity entity, float yaw, float tickDelta, MatrixStack matrices,
                                  VertexConsumerProvider consumers, int light) {
         matrices.push();
-        matrices.translate(0, 0.4, 0);
-        matrices.scale(0.68f, 0.68f, 0.68f);
+        float scale = entity.renderScale(tickDelta);
+        matrices.translate(0, 0.4 * scale, 0);
+        matrices.scale(0.68f * scale, 0.68f * scale, 0.68f * scale);
         float time = entity.age + tickDelta;
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(time * 2));
         AtlasMesh.render(matrices, consumers, light, time);
         matrices.pop();
+        AtlasLaserRenderer.render(entity, tickDelta, matrices, consumers);
         super.render(entity, yaw, tickDelta, matrices, consumers, light);
     }
 }

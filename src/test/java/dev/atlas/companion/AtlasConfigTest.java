@@ -29,6 +29,11 @@ class AtlasConfigTest {
         AtlasConfig config = new AtlasConfig();
         config.aiEndpoint = "http://127.0.0.1:8080/v1/chat/completions"; assertDoesNotThrow(config::validate);
         config.aiEndpoint = "http://example.org/v1/chat/completions";
+        assertDoesNotThrow(config::validate);
+        config.aiEndpoint = "192.168.1.10:1234/v1/chat/completions";
+        assertDoesNotThrow(config::validate);
+        assertEquals("http://192.168.1.10:1234/v1/chat/completions", config.aiEndpoint);
+        config.aiEndpoint = "ftp://example.org/api";
         assertThrows(IllegalArgumentException.class, config::validate);
         config.aiEndpoint = "https://example.org/v1/chat/completions";
         config.aiSystemPrompt = "x".repeat(AtlasConfig.MAX_PROMPT_LENGTH + 1);

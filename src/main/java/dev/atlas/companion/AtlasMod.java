@@ -30,7 +30,7 @@ public final class AtlasMod implements ModInitializer {
     public static final EntityType<AtlasEntity> ENTITY = Registry.register(Registries.ENTITY_TYPE,
             id("atlas"), net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder
                     .create(SpawnGroup.MISC, AtlasEntity::new).dimensions(EntityDimensions.fixed(0.65f, 0.8f))
-                    .trackRangeBlocks(80).trackedUpdateRate(2).build());
+                    .trackRangeBlocks(256).trackedUpdateRate(2).build());
     public static volatile AtlasConfig CONFIG;
 
     public static Identifier id(String name) { return new Identifier(ID, name); }
@@ -38,6 +38,7 @@ public final class AtlasMod implements ModInitializer {
     @Override public void onInitialize() {
         CONFIG = AtlasConfig.load();
         AtlasConfigNetworking.register();
+        AtlasControlNetworking.register();
         AtlasTool.register();
         Registry.register(Registries.ITEM, id("atlas"), ATLAS);
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> entries.add(ATLAS));
@@ -53,7 +54,7 @@ public final class AtlasMod implements ModInitializer {
         });
         ServerTickEvents.END_SERVER_TICK.register(AtlasManager::tick);
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) ->
-                !(entity instanceof ServerPlayerEntity player && CONFIG.protectOwner && AtlasManager.active(player)));
+                !(entity instanceof ServerPlayerEntity player && AtlasShield.protects(player)));
         UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
             if (!(entity instanceof AtlasEntity atlas) || !player.isSneaking()) return ActionResult.PASS;
             if (!world.isClient && player instanceof ServerPlayerEntity owner) AtlasManager.pickUp(owner, atlas);

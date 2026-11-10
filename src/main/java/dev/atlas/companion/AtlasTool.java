@@ -1,6 +1,7 @@
 package dev.atlas.companion;
 
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -36,7 +37,21 @@ public final class AtlasTool {
         enchantments.put(silk ? Enchantments.SILK_TOUCH : Enchantments.FORTUNE, silk ? 1 : FORTUNE_LEVEL);
         EnchantmentHelper.set(enchantments, stack);
     }
-    public static void register() { AttackBlockCallback.EVENT.register(AtlasTool::attack); }
+    public static void register() {
+        AttackBlockCallback.EVENT.register(AtlasTool::attack);
+        AttackEntityCallback.EVENT.register((player, world, hand, target, hit) -> {
+            ItemStack stack = player.getStackInHand(hand);
+            if (!stack.isOf(AtlasMod.ATLAS) || hand != Hand.MAIN_HAND || player.isSpectator()) return ActionResult.PASS;
+            if (world.isClient) return ActionResult.PASS;
+            ServerPlayerEntity owner = (ServerPlayerEntity)player;
+            if (!AtlasIdentity.belongsTo(stack, owner) || !AtlasManager.allowed(owner)) return ActionResult.FAIL;
+            if (!(target instanceof net.minecraft.entity.LivingEntity living) || !AtlasCombat.enemy(target, owner)) return ActionResult.PASS;
+            if (owner.getAttackCooldownProgress(0.5f) < 0.9f) return ActionResult.FAIL;
+            AtlasCombat.strike(owner, living); owner.resetLastAttackedTicks();
+            owner.swingHand(hand, true);
+            return ActionResult.SUCCESS;
+        });
+    }
     public static ActionResult attack(PlayerEntity player, World world, Hand hand, BlockPos pos, Direction direction) {
         ItemStack stack = player.getStackInHand(hand);
         if (!stack.isOf(AtlasMod.ATLAS) || hand != Hand.MAIN_HAND) return ActionResult.PASS;

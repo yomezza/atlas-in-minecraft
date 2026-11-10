@@ -36,6 +36,8 @@ public final class AtlasObservations {
             AtlasManager.say(player, Text.literal("Рядом ").append(enemy.getDisplayName()).append(endings[player.getRandom().nextInt(endings.length)]));
             memory.enemies.add(enemy.getUuid());
             if (memory.enemies.size() > 32) memory.enemies.remove(memory.enemies.iterator().next());
+            AtlasEntity atlas = AtlasManager.find(player);
+            if (atlas != null && !atlas.attacking() && AtlasCombat.pending(player) == null) AtlasCombat.offer(player);
             memory.lastComment = ticks; memory.nextBlock = ticks + AtlasMod.CONFIG.commentIntervalSeconds * 20; return;
         }
         if (ticks < memory.nextBlock) return;

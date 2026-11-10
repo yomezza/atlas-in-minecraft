@@ -16,9 +16,15 @@ import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
+import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback;
+import net.minecraft.client.render.entity.PlayerEntityRenderer;
 
 public final class AtlasClient implements ClientModInitializer {
     @Override public void onInitializeClient() {
+        AtlasWheelClient.register();
+        LivingEntityFeatureRendererRegistrationCallback.EVENT.register((type, renderer, helper, context) -> {
+            if (renderer instanceof PlayerEntityRenderer playerRenderer) helper.register(new AtlasShieldRenderer(playerRenderer));
+        });
         AtlasSettingsClient.register();
         VibeCodingRegistry.register(AtlasMod.ID, Text.translatable("vibe.atlas.mod_name"),
                 Text.translatable("vibe.atlas.mod_description"), AtlasConfigScreen::new);

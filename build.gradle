@@ -59,6 +59,7 @@ loom {
             client()
             name = 'Vibe Coding GUI tests'
             source sourceSets.clienttest
+            vmArg '-Datlas.worldtest=true'
             programArg '--username'
             programArg 'AtlasGuiTest'
             programArg '--width'
@@ -69,5 +70,13 @@ loom {
         }
     }
 }
+
+tasks.register('prepareClienttestWorld', Copy) {
+    dependsOn tasks.named('runGametest')
+    from 'run-gametest/world'
+    into 'run-clienttest/saves/AtlasPreview'
+    exclude 'session.lock', 'playerdata/**'
+}
+tasks.named('runClienttest') { dependsOn tasks.named('prepareClienttestWorld') }
 
 jar { from('LICENSE') { rename { "${it}_${project.base.archivesName.get()}" } } }

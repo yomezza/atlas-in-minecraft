@@ -28,6 +28,88 @@ public final class AtlasGameTests implements FabricGameTest {
         player.setStackInHand(Hand.MAIN_HAND, new ItemStack(AtlasMod.ATLAS));
         return player;
     }
+
+    @GameTest(templateName = EMPTY_STRUCTURE, batchId = "scale", tickLimit = 220)
+    public void controlledGrowthRisesIntoSkyAndShrinksWithStableIdentity(TestContext context) {
+        ServerPlayerEntity player = player(context);
+        AtlasMod.CONFIG.growthDurationSeconds = 4;
+        AtlasMod.ATLAS.use(context.getWorld(), player, Hand.MAIN_HAND);
+        AtlasEntity atlas = AtlasManager.find(player); java.util.UUID id = atlas.getUuid();
+        AtlasManager.execute(player, new IntentParser.Intent("scale", "32", 0));
+        context.assertTrue(atlas.currentScale() == 1 && atlas.targetScale() == 32, "Growth must set a controlled target, not jump instantly");
+        context.runAtTick(10, () -> context.assertTrue(atlas.currentScale() > 1 && atlas.currentScale() < 32, "Scale must interpolate smoothly"));
+        context.runAtTick(100, () -> {
+            context.assertTrue(atlas.currentScale() == 32 && atlas.getY() > player.getY() + 30, "A huge companion must rise into the sky");
+            context.assertTrue(atlas.getVisibilityBoundingBox().getYLength() > 30 && atlas.shouldRender(20000), "Huge rendering bounds must remain visible");
+            NbtCompound nbt = new NbtCompound(); atlas.writeNbt(nbt);
+            AtlasEntity restored = new AtlasEntity(AtlasMod.ENTITY, context.getWorld()); restored.readNbt(nbt);
+            context.assertTrue(restored.currentScale() == 32 && restored.targetScale() == 32 && restored.getUuid().equals(id), "Scale and identity must persist in NBT");
+            context.assertTrue(atlas.companionStack().getNbt().getFloat(AtlasScale.ITEM_KEY) == 32, "Recall item must preserve target scale");
+            atlas.setTargetScale(1);
+        });
+        context.runAtTick(205, () -> {
+            context.assertTrue(atlas.currentScale() == 1 && atlas.getY() < player.getY() + 3, "Normal scale must descend near the owner");
+            context.assertTrue(atlas.getUuid().equals(id), "Resizing must not replace the companion");
+            AtlasManager.pickUp(player, atlas); context.complete();
+        });
+    }
+
+    @GameTest(templateName = EMPTY_STRUCTURE, batchId = "controls")
+    public void wheelControlsChangeIndividualCompanionAndProtectionPersists(TestContext context) {
+        ServerPlayerEntity player = player(context);
+        AtlasControlNetworking.action(player, "scale", 8, "");
+        AtlasControlNetworking.action(player, "silk", 0, "");
+        context.assertTrue(player.getMainHandStack().getNbt().getFloat(AtlasScale.ITEM_KEY) == 8 && AtlasTool.silk(player.getMainHandStack()), "Wheel must control held-item scale and mining mode");
+        AtlasShield.setMode(player, 1);
+        ItemStack item = player.getMainHandStack(); player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+        context.assertTrue(AtlasShield.protects(player), "Permanent shield must remain after removing the item from hand");
+        var state = AtlasCompanionState.get(player.getServer());
+        context.assertTrue(AtlasCompanionState.fromNbt(state.writeNbt(new NbtCompound())).binding(player.getUuid()).protectionMode() == 1, "Protection preference must persist in world data");
+        AtlasShield.setMode(player, 0); context.assertTrue(!AtlasShield.protects(player), "Held-only protection must disappear with empty hands");
+        player.setStackInHand(Hand.MAIN_HAND, item); context.assertTrue(AtlasShield.protects(player), "Holding the item must restore shield protection");
+        AtlasMod.ATLAS.use(context.getWorld(), player, Hand.MAIN_HAND);
+        AtlasEntity atlas = AtlasManager.find(player);
+        context.assertTrue(!AtlasShield.protects(player), "Default protection must turn off when the item is deployed out of hand");
+        AtlasControlNetworking.action(player, "follow", 0, "");
+        context.assertTrue(atlas.flightMode() == 1 && atlas.silkMode(), "Wheel must control the deployed companion too");
+        AtlasControlNetworking.action(player, "shield_permanent", 0, "");
+        context.assertTrue(AtlasShield.protects(player), "Permanent protection must work with a deployed companion");
+        AtlasManager.pickUp(player, atlas); AtlasShield.setMode(player, 0); context.complete();
+    }
+
+    @GameTest(templateName = EMPTY_STRUCTURE, batchId = "combat", tickLimit = 80)
+    public void laserWaitsForConfirmationAndOnlyAttacksApprovedEnemies(TestContext context) {
+        ServerPlayerEntity player = player(context);
+        AtlasMod.ATLAS.use(context.getWorld(), player, Hand.MAIN_HAND);
+        AtlasEntity atlas = AtlasManager.find(player);
+        var victim = context.spawnEntity(net.minecraft.entity.EntityType.CREEPER, new BlockPos(3, 2, 5)); victim.setAiDisabled(true);
+        AtlasCombat.offer(player); var offer = AtlasCombat.pending(player);
+        context.assertTrue(offer != null && !atlas.attacking(), "Detecting targets must only offer an attack");
+        context.assertTrue(!AtlasCombat.confirm(player, java.util.UUID.randomUUID().toString()), "Invalid confirmation must not fire");
+        java.util.concurrent.atomic.AtomicReference<net.minecraft.entity.mob.CreeperEntity> newcomer = new java.util.concurrent.atomic.AtomicReference<>();
+        context.runAtTick(12, () -> {
+            context.assertTrue(victim.getHealth() == victim.getMaxHealth() && atlas.laserTarget() == null, "No damage or beam is allowed before human confirmation");
+            context.assertTrue(AtlasCombat.confirm(player, offer.token().toString()), "Owner can confirm the offered targets");
+            var next = context.spawnEntity(net.minecraft.entity.EntityType.CREEPER, new BlockPos(5, 2, 5)); next.setAiDisabled(true); newcomer.set(next);
+        });
+        context.runAtTick(40, () -> {
+            context.assertTrue(!victim.isAlive(), "Confirmed laser must cause real mob damage");
+            context.assertTrue(newcomer.get().getHealth() == newcomer.get().getMaxHealth(), "Unapproved new enemies must not be attacked");
+            context.assertTrue(AtlasCombat.pending(player) == null, "Confirmation must be consumed");
+            AtlasCombat.cancel(player); AtlasManager.pickUp(player, atlas); context.complete();
+        });
+    }
+
+    @GameTest(templateName = EMPTY_STRUCTURE, batchId = "combat")
+    public void meleeDefeatsArmoredEnemiesInTwoHitsWithoutCommands(TestContext context) {
+        ServerPlayerEntity player = player(context);
+        var victim = context.spawnEntity(net.minecraft.entity.EntityType.ZOMBIE, new BlockPos(3, 2, 5)); victim.setAiDisabled(true);
+        victim.equipStack(net.minecraft.entity.EquipmentSlot.CHEST, new ItemStack(net.minecraft.item.Items.NETHERITE_CHESTPLATE));
+        context.assertTrue(AtlasCombat.strike(player, victim) && victim.isAlive() && victim.getHealth() == victim.getMaxHealth() / 2,
+                "The first hit must remove half maximum health through armor");
+        context.assertTrue(AtlasCombat.strike(player, victim) && !victim.isAlive(), "The second actual damage hit must defeat the enemy");
+        context.complete();
+    }
     @GameTest(templateName = EMPTY_STRUCTURE)
     public void deployedCompanionKeepsOwnerInNbt(TestContext context) {
         ServerPlayerEntity player = player(context);

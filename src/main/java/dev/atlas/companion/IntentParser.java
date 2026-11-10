@@ -32,6 +32,12 @@ public final class IntentParser {
     public static Intent parse(String input) {
         String s = input.toLowerCase(Locale.ROOT).replace('ё', 'е').strip();
         if (has(s, "помощ", "что умеешь", "help")) return intent("help");
+        AtlasScale.Request scale = AtlasScale.parse(s);
+        if (scale != null) return new Intent(scale.relative() ? "scale_relative" : "scale", Double.toString(scale.value()), 0);
+        if (has(s, "найди врагов", "уничтожь врагов", "уничтожить врагов", "выжги врагов", "атакуй врагов", "лазером врагов", "найди цели", "laser attack")) return intent("laser_offer");
+        if (has(s, "защит") && has(s, "выключ", "отключ", "убери")) return new Intent("protection", "", has(s, "постоян") ? 0 : 2);
+        if (has(s, "защит") && has(s, "постоян", "всегда", "навсегда")) return new Intent("protection", "", 1);
+        if (has(s, "защит") && has(s, "в руке", "в руках", "включ")) return new Intent("protection", "", 0);
         if (has(s, "получить спутника", "призови", "summon", "дай спутника")) return intent("summon");
         if (has(s, "отмени", "отмена", "undo")) return intent("undo");
         if (has(s, "в руку", "в инвентарь", "вернись", "recall")) return intent("recall");

@@ -78,6 +78,10 @@ public final class AtlasItem extends Item {
         tooltip.add(Text.translatable("item.atlas_companion.atlas.toggle").formatted(Formatting.GRAY));
         tooltip.add(Text.translatable("item.atlas_companion.atlas.tool").formatted(Formatting.GRAY));
         tooltip.add(Text.translatable("item.atlas_companion.atlas.settings").formatted(Formatting.DARK_GRAY));
+        tooltip.add(Text.translatable("item.atlas_companion.atlas.wheel").formatted(Formatting.AQUA));
+        tooltip.add(Text.translatable("item.atlas_companion.atlas.melee").formatted(Formatting.RED));
+        float scale = stack.hasNbt() && stack.getNbt().contains(AtlasScale.ITEM_KEY) ? stack.getNbt().getFloat(AtlasScale.ITEM_KEY) : 1;
+        tooltip.add(Text.translatable("item.atlas_companion.atlas.scale", AtlasScale.format(AtlasScale.sanitize(scale, AtlasScale.MAX))).formatted(Formatting.DARK_GRAY));
         if (AtlasIdentity.id(stack) != null)
             tooltip.add(Text.translatable("item.atlas_companion.atlas.identity", AtlasIdentity.id(stack).toString().substring(0, 8)).formatted(Formatting.DARK_GRAY));
     }
