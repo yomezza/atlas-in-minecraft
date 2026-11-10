@@ -34,11 +34,16 @@ sourceSets {
         compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
         runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
     }
+    clienttest {
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
+    }
 }
 loom {
     mods {
         atlas_companion { sourceSet sourceSets.main }
         atlas_companion_test { sourceSet sourceSets.gametest }
+        atlas_companion_client_test { sourceSet sourceSets.clienttest }
     }
     runs {
         gametest {
@@ -49,6 +54,18 @@ loom {
             environmentVariable 'ATLAS_TEST_KEY', 'local-test-only'
             vmArg "-Dfabric-api.gametest.report-file=${project.layout.buildDirectory.get()}/gametest-results.xml"
             runDir 'run-gametest'
+        }
+        clienttest {
+            client()
+            name = 'Vibe Coding GUI tests'
+            source sourceSets.clienttest
+            programArg '--username'
+            programArg 'AtlasGuiTest'
+            programArg '--width'
+            programArg '1280'
+            programArg '--height'
+            programArg '800'
+            runDir 'run-clienttest'
         }
     }
 }

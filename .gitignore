@@ -2,6 +2,7 @@
 build/
 run/
 run-gametest/
+run-clienttest/
 .idea/
 *.iml
 config/atlas-companion.json

@@ -7,9 +7,25 @@ import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.model.json.ModelTransformationMode;
 import net.minecraft.util.math.RotationAxis;
+import dev.atlas.companion.client.config.AtlasConfigScreen;
+import dev.atlas.companion.client.config.AtlasSettingsClient;
+import dev.atlas.companion.client.config.VibeCodingRegistry;
+import dev.atlas.companion.client.config.VibeModsScreen;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.Screens;
+import net.minecraft.client.gui.screen.option.OptionsScreen;
+import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.text.Text;
 
 public final class AtlasClient implements ClientModInitializer {
     @Override public void onInitializeClient() {
+        AtlasSettingsClient.register();
+        VibeCodingRegistry.register(AtlasMod.ID, Text.translatable("vibe.atlas.mod_name"),
+                Text.translatable("vibe.atlas.mod_description"), AtlasConfigScreen::new);
+        ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
+            if (screen instanceof OptionsScreen) Screens.getButtons(screen).add(ButtonWidget.builder(Text.literal("Vibe Coding"),
+                    b -> client.setScreen(new VibeModsScreen(screen))).dimensions(width - 128, 7, 120, 20).build());
+        });
         EntityRendererRegistry.register(AtlasMod.ENTITY, AtlasEntityRenderer::new);
         BuiltinItemRendererRegistry.INSTANCE.register(AtlasMod.ATLAS,
                 (stack, mode, matrices, consumers, light, overlay) -> {

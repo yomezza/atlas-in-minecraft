@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "atlas_companion_client_test",
+  "version": "1.0.0",
+  "name": "Vibe Coding GUI tests",
+  "environment": "client",
+  "entrypoints": {"client": ["dev.atlas.companion.VibeClientTest"]}
+}

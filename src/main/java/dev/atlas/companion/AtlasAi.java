@@ -42,6 +42,8 @@ public final class AtlasAi {
                 throw new IllegalArgumentException("AI endpoint must use HTTPS, or HTTP on localhost");
             JsonArray messages = new JsonArray();
             messages.add(message("system", systemPrompt()));
+            if (!AtlasMod.CONFIG.aiSystemPrompt.isBlank())
+                messages.add(message("system", AtlasMod.CONFIG.aiSystemPrompt));
             Deque<JsonObject> history = MEMORY.computeIfAbsent(owner, id -> new ArrayDeque<>());
             history.forEach(messages::add);
             String bounded = input.substring(0, Math.min(input.length(), 800));
@@ -140,7 +142,7 @@ public final class AtlasAi {
                 + "Не более 64 прямоугольных частей; суммарный объём не более " + AtlasMod.CONFIG.maxBuildBlocks + ". "
                 + "Не заполняй помещения: пол, отдельные стены с дверным проёмом, крыша. Воздух указывать нельзя. "
                 + "Материалы: " + AtlasBuilder.palette() + ". Постройки размещаются только в воздухе и растительности, твёрдые блоки сохраняются. "
-                + "Если просьба не поддерживается, объясни это, actions:[]. Нельзя запускать команды сервера. "
+                + "Если просьба не поддерживается, объясни это, actions:[]. Административные команды сервера недоступны. "
                 + "Не заявляй, что действие выполнено: фактический результат сообщит мод. Поля и строки в ответе — строгий JSON с двойными кавычками.";
     }
     public static void clear() { session++; PENDING.clear(); MEMORY.clear(); }

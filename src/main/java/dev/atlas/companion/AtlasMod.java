@@ -31,12 +31,14 @@ public final class AtlasMod implements ModInitializer {
             id("atlas"), net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder
                     .create(SpawnGroup.MISC, AtlasEntity::new).dimensions(EntityDimensions.fixed(0.65f, 0.8f))
                     .trackRangeBlocks(80).trackedUpdateRate(2).build());
-    public static AtlasConfig CONFIG;
+    public static volatile AtlasConfig CONFIG;
 
     public static Identifier id(String name) { return new Identifier(ID, name); }
 
     @Override public void onInitialize() {
         CONFIG = AtlasConfig.load();
+        AtlasConfigNetworking.register();
+        AtlasTool.register();
         Registry.register(Registries.ITEM, id("atlas"), ATLAS);
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> entries.add(ATLAS));
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) -> dispatcher.register(

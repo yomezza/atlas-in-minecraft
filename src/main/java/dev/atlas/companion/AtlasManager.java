@@ -17,6 +17,10 @@ import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.Heightmap;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.server.world.ChunkTicketType;
+import net.minecraft.util.math.ChunkPos;
 
 public final class AtlasManager {
     private static final Map<UUID, UUID> DEPLOYED = new HashMap<>();
@@ -31,6 +35,10 @@ public final class AtlasManager {
                 || player.hasPermissionLevel(2) || AtlasMod.CONFIG.allowNonOperators);
     }
     public static void remember(ServerPlayerEntity player, AtlasEntity entity) {
+        var state = AtlasCompanionState.get(player.getServer());
+        var binding = state.binding(player.getUuid());
+        if (binding != null && (!binding.id().equals(entity.getUuid()) || !binding.deployed())) { entity.discard(); return; }
+        if (binding == null) AtlasIdentity.deployed(player, entity);
         UUID previous = DEPLOYED.get(player.getUuid());
         if (previous != null && !previous.equals(entity.getUuid())) {
             AtlasEntity other = find(player);
@@ -40,25 +48,36 @@ public final class AtlasManager {
     }
     public static AtlasEntity find(ServerPlayerEntity player) {
         UUID id = DEPLOYED.get(player.getUuid());
+        var binding = AtlasCompanionState.get(player.getServer()).binding(player.getUuid());
+        if (id == null && binding != null && binding.deployed()) id = binding.id();
         if (id != null) for (ServerWorld world : player.getServer().getWorlds()) {
             if (world.getEntity(id) instanceof AtlasEntity atlas && !atlas.isRemoved()) return atlas;
         }
         // NBT-loaded entities re-register themselves on tick; recover immediately on login too.
         for (ServerWorld world : player.getServer().getWorlds()) for (var entity : world.iterateEntities()) {
             if (entity instanceof AtlasEntity atlas && !atlas.isRemoved() && player.getUuid().equals(atlas.ownerId())) {
-                DEPLOYED.put(player.getUuid(), atlas.getUuid()); return atlas;
+                remember(player, atlas);
+                if (!atlas.isRemoved()) return atlas;
             }
         }
         DEPLOYED.remove(player.getUuid());
+        if (binding != null && binding.deployed()) {
+            Identifier dimension = Identifier.tryParse(binding.dimension());
+            ServerWorld world = dimension == null ? null : player.getServer().getWorld(RegistryKey.of(RegistryKeys.WORLD, dimension));
+            if (world != null) world.getChunkManager().addTicket(AtlasIdentity.TICKET, new ChunkPos(binding.pos()), 2, binding.id());
+        }
         return null;
     }
     public static boolean active(ServerPlayerEntity player) {
-        return allowed(player) && (player.getMainHandStack().isOf(AtlasMod.ATLAS)
-                || player.getOffHandStack().isOf(AtlasMod.ATLAS) || find(player) != null);
+        return allowed(player) && (AtlasIdentity.belongsTo(player.getMainHandStack(), player)
+                || AtlasIdentity.belongsTo(player.getOffHandStack(), player) || find(player) != null);
     }
     public static void say(ServerPlayerEntity player, String message) {
+        say(player, Text.literal(message));
+    }
+    public static void say(ServerPlayerEntity player, Text message) {
         player.sendMessage(Text.literal("<Атлас> ").formatted(Formatting.RED)
-                .append(Text.literal(message).formatted(Formatting.WHITE)), false);
+                .append(message.copy().formatted(Formatting.WHITE)), false);
     }
     public static void command(ServerPlayerEntity player, String message) {
         if (!allowed(player)) { say(player, "На этом сервере мои способности разрешены только операторам."); return; }
@@ -91,17 +110,22 @@ public final class AtlasManager {
                 + "Здоровье задаётся в HP: 40 = 20 сердец. Свободные разговоры и перевод просьб в команды требуют настройки AI.");
     }
     private static void summon(ServerPlayerEntity player) {
-        if (find(player) != null || player.getInventory().contains(new ItemStack(AtlasMod.ATLAS))) {
+        if (find(player) != null || AtlasIdentity.isDeployed(player) || AtlasIdentity.hasItem(player)) {
             say(player, "Я уже у тебя. Проверь инвентарь или оглянись."); return;
         }
         ItemStack stack = new ItemStack(AtlasMod.ATLAS);
-        if (!player.getInventory().insertStack(stack)) player.dropItem(stack, false);
+        AtlasIdentity.bind(stack, player);
+        if (player.getInventory().getEmptySlot() < 0 || !player.getInventory().insertStack(stack)) player.dropItem(stack, false);
         say(player, "Вот и я. Возьми предмет и нажми ПКМ.");
     }
     public static void pickUp(ServerPlayerEntity player, AtlasEntity atlas) {
+        if (atlas.isRemoved()) return;
         if (!player.getUuid().equals(atlas.ownerId())) { say(player, "У меня уже есть спутник-человек."); return; }
-        ItemStack stack = new ItemStack(AtlasMod.ATLAS);
-        if (!player.getInventory().insertStack(stack)) { say(player, "Освободи одно место в инвентаре."); return; }
+        var binding = AtlasCompanionState.get(player.getServer()).binding(player.getUuid());
+        if (binding != null && (!binding.id().equals(atlas.getUuid()) || !binding.deployed())) { atlas.discard(); return; }
+        ItemStack stack = atlas.companionStack();
+        if (!AtlasIdentity.returnItem(player, stack)) { say(player, "Освободи одно место в инвентаре."); return; }
+        AtlasIdentity.stored(player, atlas.getUuid());
         atlas.discard(); DEPLOYED.remove(player.getUuid());
         say(player, "Карманный режим. Я всё вижу.");
     }
@@ -168,6 +192,7 @@ public final class AtlasManager {
         if (server.getTicks() % 10 != 0) return;
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             if (!active(player)) continue;
+            AtlasObservations.tick(player, server.getTicks());
             if (AtlasMod.CONFIG.protectOwner && player.isAlive() && !player.isSpectator()) {
                 if (player.isOnGround() && !player.isInLava() && !player.isOnFire())
                     SAFE.put(player.getUuid(), new Anchor(player.getServerWorld(), player.getBlockPos().toImmutable()));
@@ -192,6 +217,6 @@ public final class AtlasManager {
         say(player, "Вернул в безопасное место. Давай без повторения эксперимента.");
     }
     public static void clear() {
-        DEPLOYED.clear(); SAFE.clear(); LAST_COMMAND.clear(); PRANKS.clear(); AtlasBuilder.clear(); AtlasCommands.clear();
+        DEPLOYED.clear(); SAFE.clear(); LAST_COMMAND.clear(); PRANKS.clear(); AtlasBuilder.clear(); AtlasCommands.clear(); AtlasObservations.clear();
     }
 }
