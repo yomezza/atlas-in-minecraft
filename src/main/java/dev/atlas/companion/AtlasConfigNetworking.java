@@ -29,18 +29,23 @@ public final class AtlasConfigNetworking {
         ServerPlayNetworking.registerGlobalReceiver(SAVE, (server, player, handler, buffer, sender) -> {
             UUID request = buffer.readUuid(); long expected = buffer.readLong();
             String json = buffer.readString(MAX_JSON_LENGTH);
+            boolean clearApiKey = buffer.isReadable() && buffer.readBoolean();
             server.execute(() -> {
-                Result result = update(player, expected, json);
+                Result result = update(player, expected, json, clearApiKey);
                 respond(player, request, result.saved, result.messageKey);
             });
         });
     }
     public static Result update(ServerPlayerEntity player, long expected, String json) {
+        return update(player, expected, json, false);
+    }
+    public static Result update(ServerPlayerEntity player, long expected, String json, boolean clearApiKey) {
         if (!canEdit(player)) return new Result(false, "vibe.atlas.denied");
         if (expected != revision) return new Result(false, "vibe.atlas.conflict");
         try {
             if (json.length() > MAX_JSON_LENGTH) throw new IllegalArgumentException();
             AtlasConfig next = AtlasConfig.fromJson(json);
+            next.mergeApiKeyFrom(AtlasMod.CONFIG, clearApiKey);
             next.save();
             AtlasMod.CONFIG = next;
             revision++;
@@ -58,7 +63,8 @@ public final class AtlasConfigNetworking {
         PacketByteBuf buffer = PacketByteBufs.create();
         buffer.writeUuid(request); buffer.writeBoolean(canEdit(player)); buffer.writeLong(revision);
         buffer.writeBoolean(saved); buffer.writeText(Text.translatable(messageKey));
-        buffer.writeString(AtlasMod.CONFIG.toJson(), MAX_JSON_LENGTH);
+        buffer.writeString(AtlasMod.CONFIG.publicCopy().toJson(), MAX_JSON_LENGTH);
+        buffer.writeBoolean(!AtlasMod.CONFIG.aiApiKey.isBlank());
         ServerPlayNetworking.send(player, RESPONSE, buffer);
     }
 }

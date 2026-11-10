@@ -44,8 +44,8 @@
   "vibe.atlas.field.aiEndpoint.hint": "HTTP / HTTPS · без протокола добавляется http://",
   "vibe.atlas.field.aiModel": "Модель AI",
   "vibe.atlas.field.aiModel.hint": "Имя модели у выбранного провайдера",
-  "vibe.atlas.field.aiKeyEnvironmentVariable": "Переменная API-ключа",
-  "vibe.atlas.field.aiKeyEnvironmentVariable.hint": "Имя переменной, например ATLAS_API_KEY; не сам ключ",
+  "vibe.atlas.field.aiKeyEnvironmentVariable": "Переменная ключа (резерв)",
+  "vibe.atlas.field.aiKeyEnvironmentVariable.hint": "Используется, если ключ не сохранён в конфиге",
   "vibe.atlas.field.aiTimeoutSeconds": "Тайм-аут AI, сек.",
   "vibe.atlas.field.aiTimeoutSeconds.hint": "Целое число: 5–90",
   "vibe.atlas.field.aiSystemPrompt": "Промпт / контекст",
@@ -106,5 +106,12 @@
   "wheel.option.recall": "Вернуть",
   "wheel.option.recall.short": "Вернуть",
   "wheel.option.settings": "Настройки",
-  "wheel.option.settings.short": "Настр."
+  "wheel.option.settings.short": "Настр.",
+  "vibe.atlas.field.aiApiKey": "API-ключ",
+  "vibe.atlas.field.aiApiKey.hint": "Вставь ключ напрямую · пустое поле сохраняет прежний",
+  "vibe.atlas.key_saved": "Ключ сохранён · введи новый для замены",
+  "vibe.atlas.key_placeholder": "Вставь API-ключ",
+  "vibe.atlas.key_clear": "Удалить сохранённый ключ после нажатия «Сохранить»",
+  "vibe.atlas.key_clear_pending": "Ключ будет удалён после сохранения.",
+  "vibe.atlas.key_narration": "API-ключ. Значение скрыто."
 }

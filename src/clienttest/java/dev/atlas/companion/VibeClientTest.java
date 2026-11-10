@@ -29,6 +29,7 @@ public final class VibeClientTest implements ClientModInitializer {
     private AtlasConfig original;
     private AtlasConfigScreen configScreen;
     private static final String CUSTOM = "Я Атлас — создатель этого мира.\nМой напарник любит кварцевые башни.\nБудь внимателен к его постройкам.";
+    private static final String KEY_FIXTURE = "demo-key-for-client-test";
     @Override public void onInitializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (finished) return;
@@ -151,6 +152,29 @@ public final class VibeClientTest implements ClientModInitializer {
             case 23 -> {
                 require(((AtlasShieldAccess)client.player).atlas$shieldActive(), "Permanent shield control must synchronize back to the actual owner client");
                 middleClick(client); require(client.currentScreen == null, "Middle click must close the radial wheel");
+                client.setScreen(new AtlasConfigScreen(null));
+            }
+            case 24 -> {
+                configScreen = (AtlasConfigScreen)client.currentScreen;
+                TextFieldWidget key = fields(configScreen).stream().filter(f -> f.getMessage().getString().equals(Text.translatable("vibe.atlas.field.aiApiKey").getString())).findFirst().orElseThrow();
+                require(key instanceof dev.atlas.companion.client.config.SecretTextFieldWidget, "API key input must mask its contents");
+                key.setText(KEY_FIXTURE);
+                ElementListWidget<?> list = (ElementListWidget<?>)configScreen.children().stream().filter(e -> e instanceof ElementListWidget<?>).findFirst().orElseThrow();
+                list.setScrollAmount(list.getMaxScroll());
+            }
+            case 25 -> { screenshot(client, "13-api-key-input.png"); button(configScreen, Text.translatable("vibe.atlas.save").getString()).onPress(); }
+            case 26 -> {
+                require(AtlasMod.CONFIG.aiApiKey.equals(KEY_FIXTURE), "The key entered in-game must reach the actual server configuration");
+                TextFieldWidget key = fields(configScreen).stream().filter(f -> f instanceof dev.atlas.companion.client.config.SecretTextFieldWidget).findFirst().orElseThrow();
+                require(key.getText().isEmpty(), "Saved server credentials must not be sent back to the editor");
+                button(configScreen, Text.translatable("vibe.atlas.save").getString()).onPress();
+            }
+            case 27 -> {
+                require(AtlasMod.CONFIG.aiApiKey.equals(KEY_FIXTURE), "Saving another setting must preserve the existing API key");
+                button(configScreen, "×").onPress(); button(configScreen, Text.translatable("vibe.atlas.save").getString()).onPress();
+            }
+            case 28 -> {
+                require(AtlasMod.CONFIG.aiApiKey.isEmpty(), "The explicit clear control must remove the saved server key");
                 finish(client, null);
             }
         }
@@ -188,7 +212,7 @@ public final class VibeClientTest implements ClientModInitializer {
         try {
             if (original != null) { original.save(); AtlasMod.CONFIG = original; }
             Path result = Path.of("vibe-gui-result.txt");
-            Files.writeString(result, failure == null ? "PASS: Vibe Coding, context editor, save, defaults, radial wheel, scale slider, attack confirmation, shield controls\n" : "FAIL: " + failure + "\n");
+            Files.writeString(result, failure == null ? "PASS: Vibe Coding, context, radial wheel, shield, masked API-key entry, server save, redaction, preservation and clear\n" : "FAIL: " + failure + "\n");
         } catch (Exception error) { error.printStackTrace(); }
         if (failure != null) failure.printStackTrace();
         client.scheduleStop();

@@ -336,11 +336,14 @@ public final class AtlasGameTests implements FabricGameTest {
         ServerPlayerEntity player = player(context);
         String oldEndpoint = AtlasMod.CONFIG.aiEndpoint;
         String oldVariable = AtlasMod.CONFIG.aiKeyEnvironmentVariable;
+        String oldKey = AtlasMod.CONFIG.aiApiKey;
         String oldPrompt = AtlasMod.CONFIG.aiSystemPrompt;
         HttpServer mock = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         AtomicReference<String> received = new AtomicReference<>();
+        AtomicReference<String> receivedAuthorization = new AtomicReference<>();
         mock.createContext("/v1/chat/completions", exchange -> {
             received.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            receivedAuthorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
             JsonObject action = new JsonObject(); action.addProperty("type", "commands");
             JsonArray commands = new JsonArray(); commands.add("give @s minecraft:diamond_sword{Enchantments:[{id:\"minecraft:sharpness\",lvl:5s}]} 1");
             action.add("commands", commands);
@@ -357,6 +360,7 @@ public final class AtlasGameTests implements FabricGameTest {
         mock.start();
         AtlasMod.CONFIG.aiEndpoint = "http://127.0.0.1:" + mock.getAddress().getPort() + "/v1/chat/completions";
         AtlasMod.CONFIG.aiKeyEnvironmentVariable = "ATLAS_TEST_KEY";
+        AtlasMod.CONFIG.aiApiKey = "config-key-fixture-only";
         String customPrompt = "Ты создал этот мир. Игрок — твой напарник. Отвечай в образе древнего Атласа.";
         AtlasMod.CONFIG.aiSystemPrompt = customPrompt;
         AtlasAi.ask(player, "Дай зачарованный меч");
@@ -368,6 +372,7 @@ public final class AtlasGameTests implements FabricGameTest {
                         && EnchantmentHelper.getLevel(Enchantments.SHARPNESS, stack) == 5) found = true;
             }
             context.assertTrue(found, "AI commands must give a sword with the requested enchantment");
+            context.assertTrue("Bearer config-key-fixture-only".equals(receivedAuthorization.get()), "Configured API key must be used in the actual request header");
             context.assertTrue(received.get() != null && JsonParser.parseString(received.get()).getAsJsonObject()
                     .getAsJsonArray("messages").toString().contains("зачарованный"), "The full request must reach the provider");
             JsonArray sentMessages = JsonParser.parseString(received.get()).getAsJsonObject().getAsJsonArray("messages");
@@ -376,10 +381,12 @@ public final class AtlasGameTests implements FabricGameTest {
                     "The configured context must be sent as a system message");
             mock.stop(0); AtlasMod.CONFIG.aiEndpoint = oldEndpoint; AtlasMod.CONFIG.aiKeyEnvironmentVariable = oldVariable;
             AtlasMod.CONFIG.aiSystemPrompt = oldPrompt;
+            AtlasMod.CONFIG.aiApiKey = oldKey;
         });
         context.waitAndRun(180, () -> {
             mock.stop(0); AtlasMod.CONFIG.aiEndpoint = oldEndpoint; AtlasMod.CONFIG.aiKeyEnvironmentVariable = oldVariable;
             AtlasMod.CONFIG.aiSystemPrompt = oldPrompt;
+            AtlasMod.CONFIG.aiApiKey = oldKey;
         });
     }
 
@@ -408,6 +415,29 @@ public final class AtlasGameTests implements FabricGameTest {
         } finally {
             players.removeFromOperators(player.getGameProfile()); original.save(); AtlasMod.CONFIG = original;
         }
+        context.complete();
+    }
+
+    @GameTest(templateName = EMPTY_STRUCTURE, batchId = "key-config")
+    public void serverKeyIsRedactedPreservedReplacedAndExplicitlyCleared(TestContext context) throws Exception {
+        ServerPlayerEntity player = player(context);
+        AtlasConfig original = AtlasMod.CONFIG;
+        AtlasConfig seeded = original.copy(); seeded.aiApiKey = "server-key-fixture-only"; AtlasMod.CONFIG = seeded;
+        var players = player.getServer().getPlayerManager();
+        players.removeFromOperators(player.getGameProfile());
+        try {
+            String redacted = AtlasMod.CONFIG.publicCopy().toJson();
+            context.assertTrue(!redacted.contains(seeded.aiApiKey), "Public settings must never contain the configured credential");
+            context.assertTrue(!AtlasConfigNetworking.update(player, AtlasConfigNetworking.revision(), redacted).saved(), "Ordinary players cannot change the API key");
+            players.getOpList().add(new net.minecraft.server.OperatorEntry(player.getGameProfile(), 2, false));
+            context.assertTrue(AtlasConfigNetworking.update(player, AtlasConfigNetworking.revision(), redacted).saved(), "Operators can save public settings");
+            context.assertTrue(AtlasMod.CONFIG.aiApiKey.equals("server-key-fixture-only"), "Blank redacted field must preserve the saved secret");
+            AtlasConfig replacement = AtlasMod.CONFIG.publicCopy(); replacement.aiApiKey = "replacement-fixture-only";
+            context.assertTrue(AtlasConfigNetworking.update(player, AtlasConfigNetworking.revision(), replacement.toJson()).saved(), "Operators can replace the credential");
+            context.assertTrue(AtlasMod.CONFIG.aiApiKey.equals("replacement-fixture-only"), "Replacement must apply immediately");
+            context.assertTrue(AtlasConfigNetworking.update(player, AtlasConfigNetworking.revision(), AtlasMod.CONFIG.publicCopy().toJson(), true).saved(), "Explicit deletion must save successfully");
+            context.assertTrue(AtlasMod.CONFIG.aiApiKey.isEmpty(), "Explicit deletion must clear the saved key");
+        } finally { players.removeFromOperators(player.getGameProfile()); original.save(); AtlasMod.CONFIG = original; }
         context.complete();
     }
 }

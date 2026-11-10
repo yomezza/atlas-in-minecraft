@@ -7,6 +7,38 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AtlasConfigTest {
+    @Test void configuredApiKeyTakesPriorityAndEnvironmentRemainsFallback() {
+        AtlasConfig config = new AtlasConfig();
+        assertEquals("environment-fixture", config.resolveApiKey("environment-fixture"));
+        config.aiApiKey = "direct-fixture";
+        assertEquals("direct-fixture", config.resolveApiKey("environment-fixture"));
+        config.aiApiKey = "";
+        assertEquals("", config.resolveApiKey(null));
+    }
+    @Test void configuredKeyPersistsButPublicConfigDoesNotRevealIt(@TempDir Path directory) throws Exception {
+        AtlasConfig config = new AtlasConfig(); config.aiApiKey = "test-only-private-fixture";
+        Path file = directory.resolve("atlas-companion.json"); config.save(file);
+        assertEquals(config.aiApiKey, AtlasConfig.fromJson(Files.readString(file)).aiApiKey);
+        AtlasConfig publicConfig = config.publicCopy();
+        assertEquals("", publicConfig.aiApiKey);
+        assertFalse(publicConfig.toJson().contains(config.aiApiKey));
+        assertEquals("test-only-private-fixture", config.aiApiKey);
+    }
+    @Test void blankEditPreservesKeyAndExplicitClearOrReplacementWorks() {
+        AtlasConfig original = new AtlasConfig(); original.aiApiKey = "old-fixture";
+        AtlasConfig next = original.publicCopy(); next.mergeApiKeyFrom(original, false);
+        assertEquals("old-fixture", next.aiApiKey);
+        next = original.publicCopy(); next.aiApiKey = "new-fixture"; next.mergeApiKeyFrom(original, false);
+        assertEquals("new-fixture", next.aiApiKey);
+        next.mergeApiKeyFrom(original, true); assertEquals("", next.aiApiKey);
+    }
+    @Test void invalidApiKeysAreRejectedWithoutEchoingTheValue() {
+        AtlasConfig config = new AtlasConfig(); config.aiApiKey = "private-fixture\r\nInvalid: header";
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, config::validate);
+        assertFalse(error.getMessage().contains("private-fixture"));
+        config.aiApiKey = "x".repeat(4097); assertThrows(IllegalArgumentException.class, config::validate);
+        config.aiApiKey = " test-fixture "; config.validate(); assertEquals("test-fixture", config.aiApiKey);
+    }
     @Test void detailedDefaultContextAndLegacyConfigAreSupported() {
         AtlasConfig config = AtlasConfig.fromJson("{\"protectOwner\":false,\"aiModel\":\"local-model\"}");
         assertFalse(config.protectOwner);

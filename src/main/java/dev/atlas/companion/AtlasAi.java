@@ -19,7 +19,7 @@ import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 
-/** External requests never block the game thread. Keys are read only from an environment variable. */
+/** External requests never block the game thread. Credentials are never included in chat or prompts. */
 public final class AtlasAi {
     private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     private static final Gson GSON = new Gson();
@@ -30,10 +30,10 @@ public final class AtlasAi {
     public static void ask(ServerPlayerEntity player, String input) {
         UUID owner = player.getUuid();
         if (PENDING.contains(owner)) { AtlasManager.say(player, "Секунду, ещё думаю над предыдущей просьбой."); return; }
-        String key = System.getenv(AtlasMod.CONFIG.aiKeyEnvironmentVariable);
+        String key = AtlasMod.CONFIG.effectiveApiKey();
         if (key == null || key.isBlank()) {
             if (fallback(player, input)) return;
-            AtlasManager.say(player, "AI включён, но ключ не задан в переменной окружения сервера. Встроенные просьбы работают."); return;
+            AtlasManager.say(player, "Укажи API-ключ в Vibe Coding → Атлас или в config/atlas-companion.json. Встроенные просьбы работают."); return;
         }
         try {
             URI endpoint = URI.create(AtlasMod.CONFIG.aiEndpoint);

@@ -44,8 +44,8 @@
   "vibe.atlas.field.aiEndpoint.hint": "HTTP / HTTPS · omitted scheme defaults to http://",
   "vibe.atlas.field.aiModel": "AI model",
   "vibe.atlas.field.aiModel.hint": "Model identifier provided by your API service",
-  "vibe.atlas.field.aiKeyEnvironmentVariable": "API key environment variable",
-  "vibe.atlas.field.aiKeyEnvironmentVariable.hint": "Variable name, e.g. ATLAS_API_KEY; not the secret itself",
+  "vibe.atlas.field.aiKeyEnvironmentVariable": "Key environment fallback",
+  "vibe.atlas.field.aiKeyEnvironmentVariable.hint": "Used when no key is stored in the config",
   "vibe.atlas.field.aiTimeoutSeconds": "AI timeout, seconds",
   "vibe.atlas.field.aiTimeoutSeconds.hint": "Integer: 5–90",
   "vibe.atlas.field.aiSystemPrompt": "Prompt / context",
@@ -106,5 +106,12 @@
   "wheel.option.recall": "Recall",
   "wheel.option.recall.short": "Recall",
   "wheel.option.settings": "Settings",
-  "wheel.option.settings.short": "Setup"
+  "wheel.option.settings.short": "Setup",
+  "vibe.atlas.field.aiApiKey": "API key",
+  "vibe.atlas.field.aiApiKey.hint": "Paste the key directly · blank keeps the saved value",
+  "vibe.atlas.key_saved": "Key saved · enter a new key to replace",
+  "vibe.atlas.key_placeholder": "Paste API key",
+  "vibe.atlas.key_clear": "Delete the saved key after pressing Save",
+  "vibe.atlas.key_clear_pending": "The key will be deleted when you save.",
+  "vibe.atlas.key_narration": "API key. The value is hidden."
 }

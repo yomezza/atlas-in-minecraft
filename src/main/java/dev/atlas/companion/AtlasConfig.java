@@ -51,11 +51,21 @@ public final class AtlasConfig {
     public boolean aiEnabled = false;
     public String aiEndpoint = "https://api.openai.com/v1/chat/completions";
     public String aiModel = "gpt-4.1-mini";
+    public String aiApiKey = "";
     public String aiKeyEnvironmentVariable = "ATLAS_API_KEY";
     public int aiTimeoutSeconds = 35;
     public String aiSystemPrompt = DEFAULT_SYSTEM_PROMPT;
 
     public AtlasConfig copy() { return GSON.fromJson(toJson(), AtlasConfig.class); }
+    public AtlasConfig publicCopy() { AtlasConfig copy = copy(); copy.aiApiKey = ""; return copy; }
+    public String resolveApiKey(String environmentValue) {
+        return !aiApiKey.isBlank() ? aiApiKey.strip() : environmentValue == null ? "" : environmentValue.strip();
+    }
+    public String effectiveApiKey() { return resolveApiKey(System.getenv(aiKeyEnvironmentVariable)); }
+    public void mergeApiKeyFrom(AtlasConfig previous, boolean clear) {
+        if (clear) aiApiKey = "";
+        else if (aiApiKey.isBlank()) aiApiKey = previous.aiApiKey;
+    }
     public String toJson() { return GSON.toJson(this); }
     public static AtlasConfig fromJson(String json) {
         try {
@@ -75,6 +85,9 @@ public final class AtlasConfig {
         if (maxCompanionScale < 1 || maxCompanionScale > 128) throw new IllegalArgumentException("maxCompanionScale: 1–128");
         if (growthDurationSeconds < 1 || growthDurationSeconds > 30) throw new IllegalArgumentException("growthDurationSeconds: 1–30");
         if (aiModel == null || aiModel.isBlank() || aiModel.length() > 256) throw new IllegalArgumentException("aiModel: 1–256 characters");
+        if (aiApiKey == null || aiApiKey.length() > 4096 || !aiApiKey.strip().matches("[\\x21-\\x7E]*"))
+            throw new IllegalArgumentException("aiApiKey: one line, no spaces, maximum 4096 characters");
+        aiApiKey = aiApiKey.strip();
         if (aiKeyEnvironmentVariable == null || !aiKeyEnvironmentVariable.matches("[A-Za-z_][A-Za-z0-9_]{0,127}"))
             throw new IllegalArgumentException("aiKeyEnvironmentVariable: e.g. ATLAS_API_KEY");
         if (aiSystemPrompt == null || aiSystemPrompt.length() > MAX_PROMPT_LENGTH)
