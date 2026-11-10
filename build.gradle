@@ -1,0 +1,56 @@
+plugins {
+    id 'fabric-loom' version '1.6.12'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+base { archivesName = project.archives_base_name }
+
+repositories { mavenCentral() }
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand 'version': project.version }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+java { withSourcesJar() }
+test { useJUnitPlatform() }
+
+sourceSets {
+    gametest {
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
+    }
+}
+loom {
+    mods {
+        atlas_companion { sourceSet sourceSets.main }
+        atlas_companion_test { sourceSet sourceSets.gametest }
+    }
+    runs {
+        gametest {
+            server()
+            name = 'Atlas integration tests'
+            source sourceSets.gametest
+            vmArg '-Dfabric-api.gametest'
+            environmentVariable 'ATLAS_TEST_KEY', 'local-test-only'
+            vmArg "-Dfabric-api.gametest.report-file=${project.layout.buildDirectory.get()}/gametest-results.xml"
+            runDir 'run-gametest'
+        }
+    }
+}
+
+jar { from('LICENSE') { rename { "${it}_${project.base.archivesName.get()}" } } }

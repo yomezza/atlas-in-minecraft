@@ -1,0 +1,7 @@
+.gradle/
+build/
+run/
+run-gametest/
+.idea/
+*.iml
+config/atlas-companion.json

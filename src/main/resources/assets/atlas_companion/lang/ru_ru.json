@@ -1,0 +1,6 @@
+{
+  "item.atlas_companion.atlas": "Атлас · живой спутник",
+  "entity.atlas_companion.atlas": "Атлас",
+  "item.atlas_companion.atlas.hint": "ПКМ: выпустить · Shift+ПКМ по спутнику: забрать",
+  "item.atlas_companion.atlas.chat": "В чате: Атлас, помощь"
+}

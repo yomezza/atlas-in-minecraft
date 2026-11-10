@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [" O ", "OEO", " R "],
+  "key": {
+    "O": {"item": "minecraft:obsidian"},
+    "E": {"item": "minecraft:ender_pearl"},
+    "R": {"item": "minecraft:redstone"}
+  },
+  "result": {"item": "atlas_companion:atlas", "count": 1}
+}

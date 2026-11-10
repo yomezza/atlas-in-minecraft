@@ -1,0 +1,6 @@
+{
+  "item.atlas_companion.atlas": "Atlas · Living Companion",
+  "entity.atlas_companion.atlas": "Atlas",
+  "item.atlas_companion.atlas.hint": "Use: deploy · Sneak-use companion: pick up",
+  "item.atlas_companion.atlas.chat": "Chat: Atlas, help"
+}

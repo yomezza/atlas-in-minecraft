@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "atlas_companion_test",
+  "version": "1.0.0",
+  "name": "Atlas integration tests",
+  "environment": "server",
+  "entrypoints": {"fabric-gametest": ["dev.atlas.companion.AtlasGameTests"]}
+}

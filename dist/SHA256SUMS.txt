@@ -1,0 +1,1 @@
+d3e76c65b05ff69eb1f086fa787f06c43aa1d994502157e9846b7661e8501220  atlas-companion-1.0.0-mc1.20.1-fabric.jar
