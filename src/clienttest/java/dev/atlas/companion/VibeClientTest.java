@@ -159,12 +159,18 @@ public final class VibeClientTest implements ClientModInitializer {
                 TextFieldWidget key = fields(configScreen).stream().filter(f -> f.getMessage().getString().equals(Text.translatable("vibe.atlas.field.aiApiKey").getString())).findFirst().orElseThrow();
                 require(key instanceof dev.atlas.companion.client.config.SecretTextFieldWidget, "API key input must mask its contents");
                 key.setText(KEY_FIXTURE);
+                fields(configScreen).stream().filter(f -> f.getMessage().getString().equals(Text.translatable("vibe.atlas.field.aiResponseFormat").getString()))
+                        .findFirst().orElseThrow().setText("json_schema");
+                fields(configScreen).stream().filter(f -> f.getMessage().getString().equals(Text.translatable("vibe.atlas.field.aiTimeoutSeconds").getString()))
+                        .findFirst().orElseThrow().setText("180");
                 ElementListWidget<?> list = (ElementListWidget<?>)configScreen.children().stream().filter(e -> e instanceof ElementListWidget<?>).findFirst().orElseThrow();
                 list.setScrollAmount(list.getMaxScroll());
             }
             case 25 -> { screenshot(client, "13-api-key-input.png"); button(configScreen, Text.translatable("vibe.atlas.save").getString()).onPress(); }
             case 26 -> {
                 require(AtlasMod.CONFIG.aiApiKey.equals(KEY_FIXTURE), "The key entered in-game must reach the actual server configuration");
+                require(AtlasMod.CONFIG.aiResponseFormat.equals("json_schema") && AtlasMod.CONFIG.aiTimeoutSeconds == 180,
+                        "LM Studio format and extended timeout must save through the actual in-game settings");
                 TextFieldWidget key = fields(configScreen).stream().filter(f -> f instanceof dev.atlas.companion.client.config.SecretTextFieldWidget).findFirst().orElseThrow();
                 require(key.getText().isEmpty(), "Saved server credentials must not be sent back to the editor");
                 button(configScreen, Text.translatable("vibe.atlas.save").getString()).onPress();

@@ -19,6 +19,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class AtlasGameTests implements FabricGameTest {
     private static ServerPlayerEntity player(TestContext context) {
@@ -338,12 +339,18 @@ public final class AtlasGameTests implements FabricGameTest {
         String oldVariable = AtlasMod.CONFIG.aiKeyEnvironmentVariable;
         String oldKey = AtlasMod.CONFIG.aiApiKey;
         String oldPrompt = AtlasMod.CONFIG.aiSystemPrompt;
+        String oldFormat = AtlasMod.CONFIG.aiResponseFormat;
         HttpServer mock = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         AtomicReference<String> received = new AtomicReference<>();
         AtomicReference<String> receivedAuthorization = new AtomicReference<>();
+        AtomicInteger requests = new AtomicInteger();
         mock.createContext("/v1/chat/completions", exchange -> {
             received.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             receivedAuthorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            if (requests.incrementAndGet() == 1) {
+                byte[] error = "{\"error\":\"response_format must use json_schema\"}".getBytes(StandardCharsets.UTF_8);
+                exchange.sendResponseHeaders(400, error.length); exchange.getResponseBody().write(error); exchange.close(); return;
+            }
             JsonObject action = new JsonObject(); action.addProperty("type", "commands");
             JsonArray commands = new JsonArray(); commands.add("give @s minecraft:diamond_sword{Enchantments:[{id:\"minecraft:sharpness\",lvl:5s}]} 1");
             action.add("commands", commands);
@@ -361,6 +368,7 @@ public final class AtlasGameTests implements FabricGameTest {
         AtlasMod.CONFIG.aiEndpoint = "http://127.0.0.1:" + mock.getAddress().getPort() + "/v1/chat/completions";
         AtlasMod.CONFIG.aiKeyEnvironmentVariable = "ATLAS_TEST_KEY";
         AtlasMod.CONFIG.aiApiKey = "config-key-fixture-only";
+        AtlasMod.CONFIG.aiResponseFormat = "auto";
         String customPrompt = "Ты создал этот мир. Игрок — твой напарник. Отвечай в образе древнего Атласа.";
         AtlasMod.CONFIG.aiSystemPrompt = customPrompt;
         AtlasAi.ask(player, "Дай зачарованный меч");
@@ -373,6 +381,9 @@ public final class AtlasGameTests implements FabricGameTest {
             }
             context.assertTrue(found, "AI commands must give a sword with the requested enchantment");
             context.assertTrue("Bearer config-key-fixture-only".equals(receivedAuthorization.get()), "Configured API key must be used in the actual request header");
+            context.assertTrue(requests.get() == 2 && JsonParser.parseString(received.get()).getAsJsonObject()
+                    .getAsJsonObject("response_format").get("type").getAsString().equals("json_schema"),
+                    "LM Studio parameter rejection must retry with a schema and execute the resulting action once");
             context.assertTrue(received.get() != null && JsonParser.parseString(received.get()).getAsJsonObject()
                     .getAsJsonArray("messages").toString().contains("зачарованный"), "The full request must reach the provider");
             JsonArray sentMessages = JsonParser.parseString(received.get()).getAsJsonObject().getAsJsonArray("messages");
@@ -382,11 +393,13 @@ public final class AtlasGameTests implements FabricGameTest {
             mock.stop(0); AtlasMod.CONFIG.aiEndpoint = oldEndpoint; AtlasMod.CONFIG.aiKeyEnvironmentVariable = oldVariable;
             AtlasMod.CONFIG.aiSystemPrompt = oldPrompt;
             AtlasMod.CONFIG.aiApiKey = oldKey;
+            AtlasMod.CONFIG.aiResponseFormat = oldFormat;
         });
         context.waitAndRun(180, () -> {
             mock.stop(0); AtlasMod.CONFIG.aiEndpoint = oldEndpoint; AtlasMod.CONFIG.aiKeyEnvironmentVariable = oldVariable;
             AtlasMod.CONFIG.aiSystemPrompt = oldPrompt;
             AtlasMod.CONFIG.aiApiKey = oldKey;
+            AtlasMod.CONFIG.aiResponseFormat = oldFormat;
         });
     }
 

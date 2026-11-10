@@ -7,6 +7,14 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AtlasConfigTest {
+    @Test void localAiFormatAndLongTimeoutAreValidatedAndSurviveJson() {
+        AtlasConfig config = AtlasConfig.fromJson("{\"aiTimeoutSeconds\":300,\"aiResponseFormat\":\"json_schema\"}");
+        assertEquals(300, config.aiTimeoutSeconds); assertEquals("json_schema", config.aiResponseFormat);
+        config = AtlasConfig.fromJson("{}"); assertEquals("auto", config.aiResponseFormat); assertEquals(120, config.aiTimeoutSeconds);
+        AtlasSetting.AI_TIMEOUT.apply(config, "600"); AtlasSetting.AI_FORMAT.apply(config, "PROMPT"); config.validate();
+        config.aiTimeoutSeconds = 601; assertThrows(IllegalArgumentException.class, config::validate);
+        config.aiTimeoutSeconds = 120; config.aiResponseFormat = "xml"; assertThrows(IllegalArgumentException.class, config::validate);
+    }
     @Test void configuredApiKeyTakesPriorityAndEnvironmentRemainsFallback() {
         AtlasConfig config = new AtlasConfig();
         assertEquals("environment-fixture", config.resolveApiKey("environment-fixture"));

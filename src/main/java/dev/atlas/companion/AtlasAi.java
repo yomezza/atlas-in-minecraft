@@ -1,14 +1,7 @@
 package dev.atlas.companion;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
@@ -21,13 +14,12 @@ import net.minecraft.server.network.ServerPlayerEntity;
 
 /** External requests never block the game thread. Credentials are never included in chat or prompts. */
 public final class AtlasAi {
-    private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-    private static final Gson GSON = new Gson();
     private static final Set<UUID> PENDING = new HashSet<>();
     private static final Map<UUID, Deque<JsonObject>> MEMORY = new HashMap<>();
     private static long session;
     private AtlasAi() {}
     public static void ask(ServerPlayerEntity player, String input) {
+        if (input.isBlank()) { AtlasManager.say(player, "Я здесь. О чём хочешь поговорить или что сделать?"); return; }
         UUID owner = player.getUuid();
         if (PENDING.contains(owner)) { AtlasManager.say(player, "Секунду, ещё думаю над предыдущей просьбой."); return; }
         String key = AtlasMod.CONFIG.effectiveApiKey();
@@ -36,54 +28,44 @@ public final class AtlasAi {
             AtlasManager.say(player, "Укажи API-ключ в Vibe Coding → Атлас или в config/atlas-companion.json. Встроенные просьбы работают."); return;
         }
         try {
-            URI endpoint = URI.create(AtlasMod.CONFIG.aiEndpoint);
-            if (!"https".equalsIgnoreCase(endpoint.getScheme()) && !"http".equalsIgnoreCase(endpoint.getScheme()))
-                throw new IllegalArgumentException("AI endpoint must use HTTP or HTTPS");
+            AtlasConfig config = AtlasMod.CONFIG.copy();
             JsonArray messages = new JsonArray();
             messages.add(message("system", systemPrompt()));
-            if (!AtlasMod.CONFIG.aiSystemPrompt.isBlank())
-                messages.add(message("system", AtlasMod.CONFIG.aiSystemPrompt));
+            if (!config.aiSystemPrompt.isBlank())
+                messages.add(message("system", config.aiSystemPrompt));
             Deque<JsonObject> history = MEMORY.computeIfAbsent(owner, id -> new ArrayDeque<>());
             history.forEach(messages::add);
             String bounded = input.substring(0, Math.min(input.length(), 800));
             JsonObject user = message("user", bounded);
             messages.add(user);
-            JsonObject body = new JsonObject();
-            body.addProperty("model", AtlasMod.CONFIG.aiModel);
-            body.add("messages", messages); body.addProperty("max_tokens", 1800);
-            JsonObject format = new JsonObject(); format.addProperty("type", "json_object"); body.add("response_format", format);
-            HttpRequest request = HttpRequest.newBuilder(endpoint)
-                    .timeout(Duration.ofSeconds(AtlasMod.CONFIG.aiTimeoutSeconds))
-                    .header("Content-Type", "application/json").header("Authorization", "Bearer " + key)
-                    .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(body))).build();
             PENDING.add(owner);
             long requestSession = session;
+            long started = System.nanoTime();
             MinecraftServer server = player.getServer();
             AtlasManager.say(player, "Слушаю. Дай мне немного подумать.");
-            HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString()).whenComplete((response, error) -> {
+            AtlasAiClient.send(config, messages, key).whenComplete((completion, error) -> {
                 if (server.isStopped()) return;
                 server.execute(() -> {
                     if (requestSession != session) return;
                     PENDING.remove(owner);
                     ServerPlayerEntity current = server.getPlayerManager().getPlayer(owner);
                     if (current == null || (!AtlasManager.active(current) && !AtlasShield.protects(current))) return;
-                    if (error != null || response == null || response.statusCode() != 200) {
-                        AtlasManager.say(current, "Не удалось связаться с AI.");
+                    if (error != null) {
+                        String reason = AtlasAiClient.explain(error, config.aiTimeoutSeconds);
+                        AtlasManager.say(current, reason);
                         fallback(current, input);
-                        AtlasMod.LOGGER.warn("Atlas AI request failed ({})", response == null ? "network/timeout" : response.statusCode()); return;
+                        AtlasMod.LOGGER.warn("Atlas AI failed after {} ms: {}", (System.nanoTime() - started) / 1_000_000, reason); return;
                     }
                     try {
-                        if (response.body().length() > 131072) throw new IllegalArgumentException("Response too large");
-                        String raw = JsonParser.parseString(response.body()).getAsJsonObject().getAsJsonArray("choices")
-                                .get(0).getAsJsonObject().getAsJsonObject("message").get("content").getAsString();
-                        JsonObject result = JsonParser.parseString(raw).getAsJsonObject();
-                        String reply = result.has("reply") ? result.get("reply").getAsString() : "Хорошо.";
+                        JsonObject result = completion.result();
+                        String reply = result.get("reply").getAsString();
                         AtlasManager.say(current, reply.substring(0, Math.min(reply.length(), 1000)));
-                        JsonArray actions = result.has("actions") ? result.getAsJsonArray("actions") : new JsonArray();
-                        if (actions.size() > 3) throw new IllegalArgumentException("Too many actions");
+                        JsonArray actions = result.getAsJsonArray("actions");
                         for (var element : actions) execute(current, element.getAsJsonObject());
-                        history.addLast(user); history.addLast(message("assistant", raw));
+                        history.addLast(user); history.addLast(message("assistant", completion.raw()));
                         while (history.size() > 12) history.removeFirst();
+                        AtlasMod.LOGGER.debug("Atlas AI answered in {} ms, format {}, attempts {}",
+                                (System.nanoTime() - started) / 1_000_000, completion.format(), completion.attempts());
                     } catch (Exception invalid) {
                         AtlasManager.say(current, "AI прислал действие, которое я не могу выполнить. Попробуй уточнить просьбу.");
                         AtlasMod.LOGGER.warn("Atlas AI response rejected: {}", invalid.getClass().getSimpleName());

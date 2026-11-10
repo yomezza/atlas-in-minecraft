@@ -47,7 +47,7 @@
   "vibe.atlas.field.aiKeyEnvironmentVariable": "Key environment fallback",
   "vibe.atlas.field.aiKeyEnvironmentVariable.hint": "Used when no key is stored in the config",
   "vibe.atlas.field.aiTimeoutSeconds": "AI timeout, seconds",
-  "vibe.atlas.field.aiTimeoutSeconds.hint": "Integer: 5–90",
+  "vibe.atlas.field.aiTimeoutSeconds.hint": "Integer: 5–600 · try 180–300 for LM Studio",
   "vibe.atlas.field.aiSystemPrompt": "Prompt / context",
   "vibe.atlas.field.aiSystemPrompt.hint": "Press … to open the multiline editor",
   "item.atlas_companion.atlas.identity": "Companion: %s",
@@ -113,5 +113,7 @@
   "vibe.atlas.key_placeholder": "Paste API key",
   "vibe.atlas.key_clear": "Delete the saved key after pressing Save",
   "vibe.atlas.key_clear_pending": "The key will be deleted when you save.",
-  "vibe.atlas.key_narration": "API key. The value is hidden."
+  "vibe.atlas.key_narration": "API key. The value is hidden.",
+  "vibe.atlas.field.aiResponseFormat": "AI response format",
+  "vibe.atlas.field.aiResponseFormat.hint": "auto / json_schema (LM Studio) / json_object / prompt"
 }

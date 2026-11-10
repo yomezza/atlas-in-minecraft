@@ -21,7 +21,8 @@ public enum AtlasSetting {
     AI_MODEL("aiModel", 256, c -> c.aiModel, (c,v) -> c.aiModel = v.strip()),
     AI_KEY("aiApiKey", 4096, c -> c.aiApiKey, (c,v) -> c.aiApiKey = v.strip()),
     AI_KEY_VARIABLE("aiKeyEnvironmentVariable", 128, c -> c.aiKeyEnvironmentVariable, (c,v) -> c.aiKeyEnvironmentVariable = v.strip()),
-    AI_TIMEOUT("aiTimeoutSeconds", 2, c -> Integer.toString(c.aiTimeoutSeconds), (c,v) -> c.aiTimeoutSeconds = Integer.parseInt(v.strip())),
+    AI_FORMAT("aiResponseFormat", 11, c -> c.aiResponseFormat, (c,v) -> c.aiResponseFormat = v.strip().toLowerCase(Locale.ROOT)),
+    AI_TIMEOUT("aiTimeoutSeconds", 3, c -> Integer.toString(c.aiTimeoutSeconds), (c,v) -> c.aiTimeoutSeconds = Integer.parseInt(v.strip())),
     AI_PROMPT("aiSystemPrompt", AtlasConfig.MAX_PROMPT_LENGTH, c -> c.aiSystemPrompt, (c,v) -> c.aiSystemPrompt = v);
 
     public final String key;

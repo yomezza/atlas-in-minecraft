@@ -53,7 +53,8 @@ public final class AtlasConfig {
     public String aiModel = "gpt-4.1-mini";
     public String aiApiKey = "";
     public String aiKeyEnvironmentVariable = "ATLAS_API_KEY";
-    public int aiTimeoutSeconds = 35;
+    public String aiResponseFormat = "auto";
+    public int aiTimeoutSeconds = 120;
     public String aiSystemPrompt = DEFAULT_SYSTEM_PROMPT;
 
     public AtlasConfig copy() { return GSON.fromJson(toJson(), AtlasConfig.class); }
@@ -80,7 +81,9 @@ public final class AtlasConfig {
     }
     public void validate() {
         if (maxBuildBlocks < 64 || maxBuildBlocks > 32768) throw new IllegalArgumentException("maxBuildBlocks: 64–32768");
-        if (aiTimeoutSeconds < 5 || aiTimeoutSeconds > 90) throw new IllegalArgumentException("aiTimeoutSeconds: 5–90");
+        if (aiTimeoutSeconds < 5 || aiTimeoutSeconds > 600) throw new IllegalArgumentException("aiTimeoutSeconds: 5–600");
+        if (aiResponseFormat == null || !java.util.Set.of("auto", "json_schema", "json_object", "prompt").contains(aiResponseFormat))
+            throw new IllegalArgumentException("aiResponseFormat: auto / json_schema / json_object / prompt");
         if (commentIntervalSeconds < 10 || commentIntervalSeconds > 300) throw new IllegalArgumentException("commentIntervalSeconds: 10–300");
         if (maxCompanionScale < 1 || maxCompanionScale > 128) throw new IllegalArgumentException("maxCompanionScale: 1–128");
         if (growthDurationSeconds < 1 || growthDurationSeconds > 30) throw new IllegalArgumentException("growthDurationSeconds: 1–30");
